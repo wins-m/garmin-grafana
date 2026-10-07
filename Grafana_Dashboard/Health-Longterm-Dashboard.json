@@ -6,7 +6,7 @@
     "garmin",
     "longterm"
   ],
-  "timezone": "browser",
+  "timezone": "Asia/Shanghai",
   "editable": true,
   "schemaVersion": 39,
   "time": {

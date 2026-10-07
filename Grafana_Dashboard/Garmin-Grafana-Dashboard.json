@@ -13928,8 +13928,8 @@
       },
       {
         "current": {
-          "text": "Europe/Budapest",
-          "value": "Europe/Budapest"
+          "text": "Asia/Shanghai",
+          "value": "Asia/Shanghai"
         },
         "description": "Your local time zone for grouping stats",
         "label": "Local Time Zone",
@@ -13986,7 +13986,7 @@
             "value": "Europe/Warsaw"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "Europe/Budapest",
             "value": "Europe/Budapest"
           },
@@ -14091,7 +14091,7 @@
             "value": "Asia/Seoul"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "Asia/Shanghai",
             "value": "Asia/Shanghai"
           },
@@ -14196,7 +14196,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "browser",
+  "timezone": "Asia/Shanghai",
   "title": "Garmin Stats",
   "uid": "feiibsx498gsgb",
   "version": 217,

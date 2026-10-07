@@ -2128,7 +2128,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "browser",
+  "timezone": "Asia/Shanghai",
   "title": "Garmin Strength Training Dashboard",
   "uid": "garmin-strength-training",
   "version": 1,
