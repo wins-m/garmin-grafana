@@ -27,11 +27,13 @@ class GPSDashboardTests(unittest.TestCase):
                     # Optional fields would drop rows in Influx's table parser.
                     for field in ['SatelliteTimeMs','HeartRate','Speed']:
                         self.assertNotIn(field,h['query'])
-                    self.assertTrue(any(l['type']=='route' and l['filterData']['options']=='H' for l in panel['options']['layers']))
+                    self.assertTrue(any(l['type']=='markers' and l['filterData']['options']=='H' for l in panel['options']['layers']))
                     self.assertFalse(any(t['id']=='joinByField' for t in panel['transformations']))
                     self.assertEqual(panel['transformations'][0]['options']['sort'][0]['field'],'TrackPointIndex')
                     self.assertIn('Time',panel['transformations'][1]['options']['exclude']['names'])
                     self.assertIn('raw_unconfirmed',panel['description'])
+                    self.assertFalse(any(l['type']=='route' for l in panel['options']['layers']))
+                    self.assertIn('"LatitudeRaw" != 90 OR "LongitudeRaw" != -80',h['query'])
                     if name.startswith('Health'):
                         self.assertIn('LatitudeGCJ',h['query'])
                     else:

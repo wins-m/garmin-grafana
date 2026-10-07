@@ -286,6 +286,13 @@ def coordinate_system(value):
         return value, 'explicit'
     return 'unknown', 'raw_unconfirmed'
 
+def valid_coordinate(lat, lon):
+    # Repeated export outlier (90,-80) would draw every local route to the pole.
+    # Exclude this exact pair, not all high-latitude or long-distance tracks.
+    return (math.isfinite(lat) and math.isfinite(lon) and
+            -90<=lat<=90 and -180<=lon<=180 and
+            (lat,lon) not in ((0.,0.),(90.,-80.)))
+
 def map_coordinates(lat, lon, system):
     if system == 'GCJ02':
         wlon,wlat=gcj_to_wgs(lon,lat)
@@ -386,7 +393,7 @@ def motion(root,store,before,gps_only=False):
                     except (KeyError,ValueError):
                         store.skipped['gps_invalid_coordinate']+=1
                         continue
-                    if not (math.isfinite(lat) and math.isfinite(lon) and -90<=lat<=90 and -180<=lon<=180) or (lat==0 and lon==0):
+                    if not valid_coordinate(lat,lon):
                         store.skipped['gps_invalid_coordinate']+=1
                         continue
                     f.update({'LatitudeRaw':lat,'LongitudeRaw':lon,'CoordinateSystem':coord,
@@ -421,7 +428,7 @@ def motion(root,store,before,gps_only=False):
         route=[]
         for i,p in enumerate(sorted(points,key=lambda p:p['time'])):
             lat,lon=float(p['Latitude']),float(p['Longitude'])
-            if not (-90<=lat<=90 and -180<=lon<=180) or (lat==0 and lon==0):continue
+            if not valid_coordinate(lat,lon):continue
             fs=map_coordinates(lat,lon,'WGS84')
             for k in ['LatitudeGCJ','LongitudeGCJ']:
                 if p.get(k) is not None:fs[k]=float(p[k])

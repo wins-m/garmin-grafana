@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"src"/"garmin_grafana"))
-from huawei_import import Store, health, sleep_stages, day_time, motion, minutes, coordinate_system, map_coordinates, satellite_time, export
+from huawei_import import Store, health, sleep_stages, day_time, motion, minutes, coordinate_system, map_coordinates, satellite_time, export, valid_coordinate
 
 class ImportTests(unittest.TestCase):
     def setUp(self):
@@ -100,6 +100,21 @@ class ImportTests(unittest.TestCase):
         self.assertAlmostEqual(roundtrip['LatitudeGCJ'],39.98,places=8)
         self.assertAlmostEqual(roundtrip['LongitudeGCJ'],116.31,places=8)
         self.assertEqual(map_coordinates(40.,116.,'unknown')['Longitude'],116.)
+    def test_polar_outlier_excluded_without_hiding_real_high_latitudes(self):
+        self.assertFalse(valid_coordinate(90.,-80.))
+        self.assertTrue(valid_coordinate(89.,-80.))
+        self.assertTrue(valid_coordinate(90.,0.))
+        start=1600000000000;folder=self.root/'Motion path detail data & description';folder.mkdir()
+        detail='\n'.join([f'tp=lbs;k=0;lat=40;lon=116;t={start};',
+                         f'tp=lbs;k=1;lat=90;lon=-80;t={start+1000};',
+                         'tp=lbs;k=2;lat=40.001;lon=116.001;t=0;'])
+        (folder/'motion.json').write_text(json.dumps([{'startTime':start,'endTime':start+120000,
+            'summaryData':{'sportType':258},'detailData':detail}]))
+        motion(self.root,self.store,None,gps_only=True)
+        self.assertEqual(len(self.records('ActivityGPS')),1)
+        track=[json.loads(f) for (f,) in self.store.db.execute('SELECT fields FROM tracks ORDER BY time')]
+        self.assertEqual([p['TrackPointIndex'] for p in track],[0,2])
+        self.assertFalse(any(p['LatitudeRaw']==90 and p['LongitudeRaw']==-80 for p in track))
     def test_satellite_time_scales_and_missing(self):
         start=1600000000000;end=start+120000
         self.assertEqual(satellite_time(start/1000,start,end),start)

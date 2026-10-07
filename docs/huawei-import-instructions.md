@@ -120,13 +120,13 @@ satellite time is valid. The dashboards omit storage time from the map tooltip.
 
 `MapEligible=true` requires at least two valid coordinate points. Huawei maps
 query this measurement in table format with explicit latitude/longitude fields,
-route and marker layers. Amap uses GCJ02, and Garmin Stats uses WGS84. The dropdown
+marker layers. Amap uses GCJ02, and Garmin Stats uses WGS84. The dropdown
 uses SHOW TAG VALUES and the Huawei MapEligible tag, excluding activities without
 a drawable Huawei route. It must return label strings, never numeric point counts.
 Grafana backend variable parsing may turn aggregate numeric frames into dropdown
 options when tag labels are not exposed as string fields; SELECT count subqueries
 are therefore unsuitable as activity selectors.
-Garmin maps retain a separate neutral coordinate route and optional metric coloring;
+Garmin maps retain separate neutral coordinate markers and optional metric coloring;
 missing heart rate or speed cannot hide the basic route. Missing timestamps are not
 written into the real-time `ActivityGPS` measurement. Preserved legacy GPX routes
 retain existing coordinates, tags and identities, including activities absent from
@@ -158,3 +158,14 @@ pre-repair map data state. Restoring missing GPS fields exactly requires a scope
 Huawei ActivityGPS restore from the complete pre-repair snapshot, retaining its
 field types and identities; merely replaying older fields does not remove newly
 added Influx fields. Review that operation before a destructive rollback.
+
+## Avoid stale route layers and polar outliers
+
+The installed Grafana 12.0.1 Route layer returns on empty query results without
+clearing its previous line. A source-specific route can therefore remain when
+switching between Huawei and Garmin activities. Use marker layers, which clear
+on empty results, rather than the beta Route layer. All Huawei map queries exclude
+the repeated export outlier latitude=90, longitude=-80. The importer rejects that
+exact pair for new real-time and map-only points and preserved GPX map copies.
+Other high-latitude coordinates remain valid; raw exports and existing real-time
+GPS observations are retained for audit. No broad geographic clipping is used.

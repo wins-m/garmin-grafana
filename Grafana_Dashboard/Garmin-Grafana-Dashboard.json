@@ -4331,62 +4331,6 @@
         },
         "layers": [
           {
-            "type": "route",
-            "name": "Garmin route",
-            "filterData": {
-              "id": "byRefId",
-              "options": "G"
-            },
-            "tooltip": false,
-            "location": {
-              "mode": "coords",
-              "latitude": "latitude",
-              "longitude": "longitude"
-            },
-            "config": {
-              "showLegend": false,
-              "style": {
-                "color": {
-                  "fixed": "#607d8b"
-                },
-                "opacity": 0.85,
-                "size": {
-                  "fixed": 3
-                },
-                "lineWidth": 2
-              },
-              "arrow": 0
-            }
-          },
-          {
-            "type": "route",
-            "name": "Huawei route",
-            "filterData": {
-              "id": "byRefId",
-              "options": "H"
-            },
-            "tooltip": false,
-            "location": {
-              "mode": "coords",
-              "latitude": "latitude",
-              "longitude": "longitude"
-            },
-            "config": {
-              "showLegend": false,
-              "style": {
-                "color": {
-                  "fixed": "#607d8b"
-                },
-                "opacity": 0.85,
-                "size": {
-                  "fixed": 3
-                },
-                "lineWidth": 2
-              },
-              "arrow": 0
-            }
-          },
-          {
             "type": "markers",
             "name": "Garmin points",
             "filterData": {
@@ -4533,7 +4477,7 @@
           },
           "rawQuery": true,
           "resultFormat": "table",
-          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter ORDER BY time ASC"
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter AND (\"LatitudeRaw\" != 90 OR \"LongitudeRaw\" != -80) ORDER BY time ASC"
         },
         {
           "refId": "C",
@@ -4576,7 +4520,7 @@
         }
       ],
       "type": "geomap",
-      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。"
+      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。 使用轨迹点图层，空结果时清除旧轨迹；过滤华为导出中重复的 (90,-80) 异常坐标。"
     },
     {
       "datasource": {
@@ -4657,62 +4601,6 @@
           "showZoom": true
         },
         "layers": [
-          {
-            "type": "route",
-            "name": "Garmin route",
-            "filterData": {
-              "id": "byRefId",
-              "options": "G"
-            },
-            "tooltip": false,
-            "location": {
-              "mode": "coords",
-              "latitude": "latitude",
-              "longitude": "longitude"
-            },
-            "config": {
-              "showLegend": false,
-              "style": {
-                "color": {
-                  "fixed": "#607d8b"
-                },
-                "opacity": 0.85,
-                "size": {
-                  "fixed": 3
-                },
-                "lineWidth": 2
-              },
-              "arrow": 0
-            }
-          },
-          {
-            "type": "route",
-            "name": "Huawei route",
-            "filterData": {
-              "id": "byRefId",
-              "options": "H"
-            },
-            "tooltip": false,
-            "location": {
-              "mode": "coords",
-              "latitude": "latitude",
-              "longitude": "longitude"
-            },
-            "config": {
-              "showLegend": false,
-              "style": {
-                "color": {
-                  "fixed": "#607d8b"
-                },
-                "opacity": 0.85,
-                "size": {
-                  "fixed": 3
-                },
-                "lineWidth": 2
-              },
-              "arrow": 0
-            }
-          },
           {
             "type": "markers",
             "name": "Garmin points",
@@ -4864,7 +4752,7 @@
           },
           "rawQuery": true,
           "resultFormat": "table",
-          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter ORDER BY time ASC"
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter AND (\"LatitudeRaw\" != 90 OR \"LongitudeRaw\" != -80) ORDER BY time ASC"
         },
         {
           "refId": "C",
@@ -4907,7 +4795,7 @@
         }
       ],
       "type": "geomap",
-      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。"
+      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。 使用轨迹点图层，空结果时清除旧轨迹；过滤华为导出中重复的 (90,-80) 异常坐标。"
     },
     {
       "datasource": {
