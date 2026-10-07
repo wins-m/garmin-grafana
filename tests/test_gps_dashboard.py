@@ -10,8 +10,9 @@ class GPSDashboardTests(unittest.TestCase):
         for name,ids in [('Health-Longterm-Dashboard',{12}),('Garmin-Grafana-Dashboard',{49,50})]:
             dashboard=json.loads((ROOT/(name+'.json')).read_text())
             variable=next(v for v in dashboard['templating']['list'] if v['name']=='ActivityGPS')
-            self.assertIn('count("Latitude")',variable['definition'])
-            self.assertIn('"n" >= 2',variable['definition'])
+            self.assertIn('SHOW TAG VALUES',variable['definition'])
+            self.assertIn('WITH KEY = "ActivitySelector"',variable['definition'])
+            self.assertNotIn('count(',variable['definition'])
             self.assertEqual(variable['refresh'],2)
             for panel in dashboard['panels']:
                 if panel['id'] not in ids:continue

@@ -121,7 +121,11 @@ satellite time is valid. The dashboards omit storage time from the map tooltip.
 `MapEligible=true` requires at least two valid coordinate points. Huawei maps
 query this measurement in table format with explicit latitude/longitude fields,
 route and marker layers. Amap uses GCJ02, and Garmin Stats uses WGS84. The dropdown
-counts valid points per activity and excludes activities without a drawable route.
+uses SHOW TAG VALUES and the Huawei MapEligible tag, excluding activities without
+a drawable Huawei route. It must return label strings, never numeric point counts.
+Grafana backend variable parsing may turn aggregate numeric frames into dropdown
+options when tag labels are not exposed as string fields; SELECT count subqueries
+are therefore unsuitable as activity selectors.
 Garmin maps retain a separate neutral coordinate route and optional metric coloring;
 missing heart rate or speed cannot hide the basic route. Missing timestamps are not
 written into the real-time `ActivityGPS` measurement. Preserved legacy GPX routes

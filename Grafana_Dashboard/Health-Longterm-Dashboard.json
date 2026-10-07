@@ -24,8 +24,8 @@
           "type": "influxdb",
           "uid": "garmin_influxdb"
         },
-        "query": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
-        "definition": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
+        "query": "SHOW TAG VALUES FROM \"HuaweiActivityTrack\" WITH KEY = \"ActivitySelector\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter",
+        "definition": "SHOW TAG VALUES FROM \"HuaweiActivityTrack\" WITH KEY = \"ActivitySelector\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter",
         "refresh": 2,
         "sort": 2,
         "multi": false,

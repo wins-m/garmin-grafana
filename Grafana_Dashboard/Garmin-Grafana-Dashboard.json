@@ -13910,13 +13910,13 @@
           "type": "influxdb",
           "uid": "${DS_GARMIN_STATS}"
         },
-        "definition": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WHERE ((\"Source\" !~ /^huawei$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180) OR (\"Source\" = 'huawei' AND \"MapEligible\" = 'true')) AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
+        "definition": "SHOW TAG VALUES FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WITH KEY = \"ActivitySelector\" WHERE (\"Source\" !~ /^huawei$/ OR \"MapEligible\" = 'true') AND $timeFilter",
         "description": "List of Activities dropdown",
         "label": "Activity with GPS",
         "name": "ActivityGPS",
         "options": [],
         "query": {
-          "query": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WHERE ((\"Source\" !~ /^huawei$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180) OR (\"Source\" = 'huawei' AND \"MapEligible\" = 'true')) AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
+          "query": "SHOW TAG VALUES FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WITH KEY = \"ActivitySelector\" WHERE (\"Source\" !~ /^huawei$/ OR \"MapEligible\" = 'true') AND $timeFilter",
           "refId": "InfluxVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
