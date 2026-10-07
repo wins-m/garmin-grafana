@@ -1,7 +1,8 @@
 """Prepare a Huawei Health export for GarminStats; stdlib only, no database writes.
 
 One format is selected for mirror datasets. Existing Huawei identities are reused.
-Unspecified minute distance/calorie units and GPS coordinate systems remain raw.
+Unspecified minute distance/calorie units remain raw. Missing GPS coordinate
+systems use the GCJ02 default documented in the export field dictionary.
 """
 import argparse
 import collections
@@ -65,17 +66,25 @@ class Store:
         if not resume:
             self.db.execute('CREATE TABLE points (measurement TEXT, tags TEXT, time INTEGER, fields TEXT, rank INTEGER, PRIMARY KEY(measurement,tags,time)) WITHOUT ROWID')
             self.db.execute('CREATE TABLE sleep (time INTEGER PRIMARY KEY, end INTEGER, stage TEXT, rank INTEGER)')
+        self.db.execute('CREATE TABLE IF NOT EXISTS tracks (measurement TEXT, tags TEXT, time INTEGER, fields TEXT, rank INTEGER, PRIMARY KEY(measurement,tags,time)) WITHOUT ROWID')
         self.skipped = collections.Counter()
         self.conflicts = collections.Counter()
     def add(self, m, ms, fields, tags=None, rank=0):
         if not ms or ms < 946684800000:
             raise ValueError('Invalid point timestamp')
+        self._add('points', m, ms, fields, tags, rank)
+    def add_track(self, start_ms, ordinal, fields, tags, rank=0):
+        # This is a storage identity/order, NOT a satellite timestamp. Keep it
+        # outside the millisecond table so missing timestamps never become GPS.
+        self._add('tracks', 'HuaweiActivityTrack', start_ms*1000000+ordinal,
+                  fields, tags, rank)
+    def _add(self, table, m, stamp, fields, tags, rank):
         fs = {k:v for k,v in fields.items() if v is not None and
               not (isinstance(v, float) and not math.isfinite(v))}
         if not fs:
             return
         ts = json.dumps(tags or BASE_TAGS, sort_keys=True, ensure_ascii=False)
-        old = self.db.execute('SELECT fields, rank FROM points WHERE measurement=? AND tags=? AND time=?',(m,ts,ms)).fetchone()
+        old = self.db.execute(f'SELECT fields, rank FROM {table} WHERE measurement=? AND tags=? AND time=?',(m,ts,stamp)).fetchone()
         if old:
             prior = json.loads(old[0])
             if any(k in prior and prior[k] != v for k,v in fs.items()):
@@ -85,8 +94,8 @@ class Store:
                 rank = old[1]
             else:
                 fs = {**prior, **fs}
-        self.db.execute('INSERT OR REPLACE INTO points VALUES(?,?,?,?,?)',
-                        (m,ts,int(ms),json.dumps(fs,ensure_ascii=False),int(rank)))
+        self.db.execute(f'INSERT OR REPLACE INTO {table} VALUES(?,?,?,?,?)',
+                        (m,ts,int(stamp),json.dumps(fs,ensure_ascii=False),int(rank)))
     def sleep(self, start, end, stage, rank):
         old = self.db.execute('SELECT rank FROM sleep WHERE time=?',(start,)).fetchone()
         if not old or rank >= old[0]:
@@ -269,9 +278,54 @@ def gcj_to_wgs(lon,lat):
     dlon=dlon*180/(6378245/math.sqrt(magic)*math.cos(rad)*math.pi)
     return lon-dlon,lat-dlat
 
-def motion(root,store,before):
+def coordinate_system(value):
+    # Motion export: Field description row 19, default GCJ02, deprecated field.
+    if value is None or str(value).strip().lower() in ('', '(null)', 'null'):
+        return 'GCJ02', 'export_default'
+    if value in ('GCJ02', 'WGS84'):
+        return value, 'explicit'
+    return 'unknown', 'raw_unconfirmed'
+
+def map_coordinates(lat, lon, system):
+    if system == 'GCJ02':
+        wlon,wlat=gcj_to_wgs(lon,lat)
+        return {'Latitude':wlat,'Longitude':wlon,'LatitudeGCJ':lat,'LongitudeGCJ':lon}
+    if system == 'WGS84':
+        # Iteratively invert GCJ->WGS rather than assuming a single shift is exact.
+        glon,glat=lon,lat
+        for _ in range(4):
+            wlon,wlat=gcj_to_wgs(glon,glat)
+            glon+=lon-wlon;glat+=lat-wlat
+        return {'Latitude':lat,'Longitude':lon,'LatitudeGCJ':glat,'LongitudeGCJ':glon}
+    # Approved display fallback; provenance remains unknown, no false claim.
+    return {'Latitude':lat,'Longitude':lon,'LatitudeGCJ':lat,'LongitudeGCJ':lon}
+
+def satellite_time(value, start, end):
+    try:
+        stamp=float(value)
+    except (TypeError,ValueError):
+        return None
+    if not math.isfinite(stamp) or stamp <= 0:
+        return None
+    if start-86400000<=stamp*1000<=end+86400000:
+        stamp*=1000
+    return int(stamp) if start-86400000<=stamp<=end+86400000 else None
+
+def emit_track(store, start, points, tags, rank=0):
+    # Original k is an index, not elapsed time (Tag description row 8).
+    # Tie-break by source order for duplicate k; storage ordinal stays unique.
+    points=sorted(points,key=lambda p:(p.get('TrackPointIndex',0),p.get('SourceOrder',0)))
+    tags={**tags,'MapEligible':'true' if len(points)>=2 else 'false'}
+    for ordinal,fields in enumerate(points):
+        store.add_track(start,ordinal,fields,tags,rank)
+
+def motion(root,store,before,gps_only=False):
     old_summaries={r['ActivityID']:r for r in previous(before,'ActivitySummary') if r.get('activityType')!='No Activity'}
-    old_gps={r.get('ActivityID') for r in previous(before,'ActivityGPS')}
+    old_tracks=collections.defaultdict(list)
+    for old in previous(before,'ActivityGPS'):
+        if old.get('Latitude') is not None and old.get('Longitude') is not None:
+            old_tracks[old['ActivityID']].append(old)
+    old_gps=set(old_tracks)
     old_ends={r['ActivityID']:r['time'] for r in previous(before,'ActivitySummary') if r.get('activityType')=='No Activity'}
     identities=set()
     for path in sorted((root/'Motion path detail data & description').glob('*.json')):
@@ -315,47 +369,68 @@ def motion(root,store,before):
                     if old.get(k) is not None:
                         # Influx JSON renders integral-valued floats as ints.
                         fields[k]=float(old[k]) if isinstance(fields[k],float) else old[k]
-            store.add('ActivitySummary',summary_start,fields,tags,r.get('version',0))
-            store.add('ActivitySummary',summary_end,{'Activity_ID':int(aid),'Device_ID':0,'activityName':'END','activityType':'No Activity'},tags,r.get('version',0))
+            if not gps_only:
+                store.add('ActivitySummary',summary_start,fields,tags,r.get('version',0))
+                store.add('ActivitySummary',summary_end,{'Activity_ID':int(aid),'Device_ID':0,'activityName':'END','activityType':'No Activity'},tags,r.get('version',0))
             if aid in old_gps:
                 store.skipped['existing_gps_activity_preserved']+=1
                 continue
-            coord=s.get('coordinate');coord=coord if coord in ('GCJ02','WGS84') else 'unknown'
-            for line in r.get('detailData','').splitlines():
+            coord,provenance=coordinate_system(s.get('coordinate'))
+            track=[]
+            for order,line in enumerate(r.get('detailData','').splitlines()):
                 parts=dict(p.split('=',1) for p in line.removeprefix('DETAIL_NULL').split(';') if '=' in p)
                 tp=parts.get('tp');f={'Activity_ID':int(aid),'ActivityName':kind}
                 if tp=='lbs':
-                    stamp=float(parts.get('t',0))
-                    # Exports contain epoch seconds AND epoch milliseconds.
-                    # The independently recorded session interval identifies the
-                    # scale; t=0 remains unknown and is never assigned fake time.
-                    if start-86400000<=stamp*1000<=end+86400000:
-                        stamp*=1000
-                        store.skipped['gps_epoch_seconds_converted']+=1
-                    if not (start-86400000 <= stamp <= end+86400000):
-                        store.skipped['gps_unknown_or_outside_timestamp']+=1
-                        continue
-                    lat,lon=float(parts['lat']),float(parts['lon'])
-                    if not (-90<=lat<=90 and -180<=lon<=180) or (lat==0 and lon==0):
+                    stamp=satellite_time(parts.get('t'),start,end)
+                    try:lat,lon=float(parts['lat']),float(parts['lon'])
+                    except (KeyError,ValueError):
                         store.skipped['gps_invalid_coordinate']+=1
                         continue
-                    f.update({'LatitudeRaw':lat,'LongitudeRaw':lon,'CoordinateSystem':coord,'DurationSeconds':(stamp-start)/1000})
-                    if coord=='WGS84':
-                        shifted_lon,shifted_lat=gcj_to_wgs(lon,lat)
-                        f.update({'Latitude':lat,'Longitude':lon,
-                                  'LatitudeGCJ':2*lat-shifted_lat,'LongitudeGCJ':2*lon-shifted_lon})
-                    elif coord=='GCJ02':
-                        wlon,wlat=gcj_to_wgs(lon,lat)
-                        f.update({'Latitude':wlat,'Longitude':wlon,'LatitudeGCJ':lat,'LongitudeGCJ':lon})
+                    if not (math.isfinite(lat) and math.isfinite(lon) and -90<=lat<=90 and -180<=lon<=180) or (lat==0 and lon==0):
+                        store.skipped['gps_invalid_coordinate']+=1
+                        continue
+                    f.update({'LatitudeRaw':lat,'LongitudeRaw':lon,'CoordinateSystem':coord,
+                              'CoordinateSystemSource':provenance,**map_coordinates(lat,lon,coord)})
                     if parts.get('alt') is not None and -500<float(parts['alt'])<9000:f['Altitude']=float(parts['alt'])
+                    try:index=int(parts.get('k',order))
+                    except ValueError:index=order
+                    track.append({**f,'TrackPointIndex':index,'SourceOrder':order,
+                                  'SatelliteTimeKnown':stamp is not None,'SatelliteTimeMs':stamp})
+                    if stamp is None:
+                        store.skipped['gps_map_only_without_satellite_time']+=1
+                        continue
+                    f['DurationSeconds']=(stamp-start)/1000
                 elif tp=='h-r':
+                    if gps_only:continue
                     stamp=float(parts.get('k',0));val=float(parts.get('v',0))
                     if not (start-300000<=stamp<=end+300000 and 0<val<255):continue
                     f['HeartRate']=val
                 else:
                     continue
+                if gps_only:
+                    f={k:v for k,v in f.items() if k in ('Latitude','Longitude','LatitudeGCJ','LongitudeGCJ',
+                                                        'LatitudeRaw','LongitudeRaw','CoordinateSystem','CoordinateSystemSource')}
                 store.add('ActivityGPS',int(stamp),f,tags,r.get('version',0))
+            emit_track(store,start,track,tags,r.get('version',0))
         store.commit()
+    # Include all preserved GPX routes, also the activity absent from this export.
+    for aid,points in old_tracks.items():
+        old=old_summaries.get(aid)
+        if not old:continue
+        tags={k:old[k] for k in ['Database_Name','Device','Source','ActivityID','ActivitySelector'] if old.get(k) is not None}
+        route=[]
+        for i,p in enumerate(sorted(points,key=lambda p:p['time'])):
+            lat,lon=float(p['Latitude']),float(p['Longitude'])
+            if not (-90<=lat<=90 and -180<=lon<=180) or (lat==0 and lon==0):continue
+            fs=map_coordinates(lat,lon,'WGS84')
+            for k in ['LatitudeGCJ','LongitudeGCJ']:
+                if p.get(k) is not None:fs[k]=float(p[k])
+            route.append({**fs,'LatitudeRaw':lat,'LongitudeRaw':lon,'CoordinateSystem':'WGS84',
+                          'CoordinateSystemSource':'legacy','TrackPointIndex':i,'SourceOrder':i,
+                          'SatelliteTimeKnown':True,'SatelliteTimeMs':int(p['time']),
+                          'Activity_ID':int(aid),'ActivityName':old['activityType']})
+        emit_track(store,int(old['time']),route,tags)
+    store.commit()
     store.identities=len(identities)
 
 def medals(root,store,before):
@@ -399,6 +474,21 @@ def export(store,out):
             'value_conflicts_resolved_by_version':dict(store.conflicts),
             'activities':store.identities,'total_points':sum(c['points'] for c in counts.values()),
             'line_protocol_sha256':hashlib.sha256((out/'points.lp.gz').read_bytes()).hexdigest()}
+    track_fields=collections.Counter()
+    track_count=0;eligible=set();all_routes=set()
+    with gzip.open(out/'tracks.ns.lp.gz','wt',encoding='utf-8') as f:
+        for m,tags,ns,fields in store.db.execute('SELECT measurement,tags,time,fields FROM tracks ORDER BY tags,time'):
+            tags=json.loads(tags);fields=json.loads(fields)
+            header=line_token(m)+''.join(','+line_token(k)+'='+line_token(v) for k,v in sorted(tags.items()))
+            f.write(header+' '+','.join(line_token(k)+'='+field_token(v) for k,v in sorted(fields.items()))+' '+str(ns)+'\n')
+            track_count+=1;track_fields.update(fields.keys())
+            all_routes.add(tags['ActivityID'])
+            if tags['MapEligible']=='true':eligible.add(tags['ActivityID'])
+    report['tracks']={'measurement':'HuaweiActivityTrack','precision':'ns','points':track_count,
+                      'activities':len(all_routes),'eligible_activities':len(eligible),
+                      'field_counts':dict(track_fields),
+                      'line_protocol_sha256':hashlib.sha256((out/'tracks.ns.lp.gz').read_bytes()).hexdigest(),
+                      'storage_time_is_satellite_time':False}
     (out/'manifest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
     print(json.dumps(report,ensure_ascii=False,indent=2),flush=True)
 
@@ -407,16 +497,18 @@ def main():
     p.add_argument('--export-root',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--before',type=Path)
+    p.add_argument('--gps-only',action='store_true',help='Prepare only GPS repairs and ordered map tracks')
     a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     db=a.output/'normalized.sqlite'
     if db.exists():raise SystemExit('Use a fresh output directory; existing normalized.sqlite is preserved')
     store=Store(db)
-    health(a.export_root,store,a.before)
-    sleep_stages(store)
-    daily(a.export_root,store)
-    minutes(a.export_root,store)
-    motion(a.export_root,store,a.before)
-    medals(a.export_root,store,a.before)
+    if not a.gps_only:
+        health(a.export_root,store,a.before)
+        sleep_stages(store)
+        daily(a.export_root,store)
+        minutes(a.export_root,store)
+    motion(a.export_root,store,a.before,gps_only=a.gps_only)
+    if not a.gps_only:medals(a.export_root,store,a.before)
     export(store,a.output)
 
 if __name__=='__main__':main()

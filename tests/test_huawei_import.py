@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"src"/"garmin_grafana"))
-from huawei_import import Store, health, sleep_stages, day_time, motion, minutes
+from huawei_import import Store, health, sleep_stages, day_time, motion, minutes, coordinate_system, map_coordinates, satellite_time, export
 
 class ImportTests(unittest.TestCase):
     def setUp(self):
@@ -84,5 +84,66 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(gps[0][0],start+1000)
         self.assertEqual(gps[0][1]['Latitude'],30.)
         self.assertEqual(len(gps),1)
+        tracks=[json.loads(f) for (f,) in self.store.db.execute('SELECT fields FROM tracks ORDER BY time')]
+        self.assertEqual(len(tracks),2)
+        self.assertFalse(tracks[1]['SatelliteTimeKnown'])
+        self.assertNotIn('SatelliteTimeMs',tracks[1])
+    def test_coordinate_dictionary_default_and_unconfirmed_fallback(self):
+        for v in [None,'','(null)','null']:
+            self.assertEqual(coordinate_system(v),('GCJ02','export_default'))
+        self.assertEqual(coordinate_system('WGS84'),('WGS84','explicit'))
+        self.assertEqual(coordinate_system('BD09'),('unknown','raw_unconfirmed'))
+        mapped=map_coordinates(39.98,116.31,'GCJ02')
+        self.assertEqual(mapped['LatitudeGCJ'],39.98)
+        self.assertGreater(abs(mapped['Longitude']-116.31),.001)
+        roundtrip=map_coordinates(mapped['Latitude'],mapped['Longitude'],'WGS84')
+        self.assertAlmostEqual(roundtrip['LatitudeGCJ'],39.98,places=8)
+        self.assertAlmostEqual(roundtrip['LongitudeGCJ'],116.31,places=8)
+        self.assertEqual(map_coordinates(40.,116.,'unknown')['Longitude'],116.)
+    def test_satellite_time_scales_and_missing(self):
+        start=1600000000000;end=start+120000
+        self.assertEqual(satellite_time(start/1000,start,end),start)
+        self.assertEqual(satellite_time(start,start,end),start)
+        for v in [0,-1,'nan','bad',None,start-90000000]:
+            self.assertIsNone(satellite_time(v,start,end))
+    def test_map_only_points_order_invalid_coordinates_and_replay(self):
+        start=1600000000000;folder=self.root/'Motion path detail data & description';folder.mkdir()
+        details='\n'.join(['tp=lbs;k=2;lat=40;lon=116;t=0;',
+                           'tp=lbs;k=0;lat=40.001;lon=116.001;t=0;',
+                           'tp=lbs;k=1;lat=0;lon=0;t=0;',
+                           'tp=lbs;k=3;lat=nan;lon=116;t=0;',
+                           'tp=lbs;k=4;lat=91;lon=116;t=0;'])
+        (folder/'motion.json').write_text(json.dumps([{'startTime':start,'endTime':start+120000,
+          'summaryData':{'sportType':258},'detailData':details}]))
+        motion(self.root,self.store,None,gps_only=True)
+        motion(self.root,self.store,None,gps_only=True)
+        self.assertEqual(self.records('ActivityGPS'),[])
+        self.assertEqual(self.records('ActivitySummary'),[])
+        tracks=[(json.loads(t),ns,json.loads(f)) for t,ns,f in self.store.db.execute('SELECT tags,time,fields FROM tracks ORDER BY time')]
+        self.assertEqual(len(tracks),2)
+        self.assertEqual([p[2]['TrackPointIndex'] for p in tracks],[0,2])
+        self.assertEqual([p[1] for p in tracks],[start*1000000,start*1000000+1])
+        self.assertEqual(tracks[0][0]['MapEligible'],'true')
+        self.assertEqual(tracks[0][2]['CoordinateSystemSource'],'export_default')
+        export(self.store,self.root)
+        import gzip
+        lines=gzip.open(self.root/'tracks.ns.lp.gz','rt').read().splitlines()
+        self.assertEqual(len(lines),2)
+        self.assertTrue(lines[1].endswith(str(start*1000000+1)))
+        self.assertEqual(json.loads((self.root/'manifest.json').read_text())['tracks']['precision'],'ns')
+    def test_legacy_route_included_when_absent_from_export(self):
+        before=self.root/'before';before.mkdir();start=1600000000000
+        base={'ActivityID':str(start//1000),'ActivitySelector':'legacy-running','Database_Name':'GarminStats','Device':'HUAWEI (import)','Source':'huawei'}
+        def save(name,rows):
+            cols=list(rows[0]);data={'results':[{'series':[{'columns':cols,'values':[[r.get(k) for k in cols] for r in rows]}]}]}
+            (before/(name+'.json')).write_text(json.dumps(data))
+        save('ActivitySummary',[{**base,'time':start,'activityType':'running'}])
+        save('ActivityGPS',[{**base,'time':start+i*1000,'Latitude':40.,'Longitude':116.+i*.001,'LatitudeGCJ':40.001,'LongitudeGCJ':116.006+i*.001} for i in range(2)])
+        motion(self.root,self.store,before,gps_only=True)
+        rows=[json.loads(f) for (f,) in self.store.db.execute('SELECT fields FROM tracks ORDER BY time')]
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]['CoordinateSystemSource'],'legacy')
+        self.assertEqual(rows[0]['LongitudeGCJ'],116.006)
+        self.assertEqual(self.records('ActivityGPS'),[])
 
 if __name__=='__main__':unittest.main()

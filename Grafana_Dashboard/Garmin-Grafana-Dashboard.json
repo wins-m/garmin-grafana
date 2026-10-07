@@ -4331,6 +4331,122 @@
         },
         "layers": [
           {
+            "type": "route",
+            "name": "Garmin route",
+            "filterData": {
+              "id": "byRefId",
+              "options": "G"
+            },
+            "tooltip": false,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "lineWidth": 2
+              },
+              "arrow": 0
+            }
+          },
+          {
+            "type": "route",
+            "name": "Huawei route",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
+            },
+            "tooltip": false,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "lineWidth": 2
+              },
+              "arrow": 0
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Garmin points",
+            "filterData": {
+              "id": "byRefId",
+              "options": "G"
+            },
+            "tooltip": true,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              }
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Huawei points",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
+            },
+            "tooltip": true,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              }
+            }
+          },
+          {
             "config": {
               "showLegend": true,
               "style": {
@@ -4367,17 +4483,19 @@
                 }
               }
             },
-            "filterData": {
-              "id": "byRefId",
-              "options": "joinByField-I-J-A-B"
-            },
             "location": {
-              "mode": "auto"
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
             },
             "name": "Speed (Km/h)",
             "opacity": 0.8,
             "tooltip": false,
-            "type": "markers"
+            "type": "markers",
+            "filterData": {
+              "id": "byRefId",
+              "options": "C"
+            }
           }
         ],
         "tooltip": {
@@ -4398,155 +4516,67 @@
       "pluginVersion": "12.0.1",
       "targets": [
         {
-          "alias": "lat",
+          "refId": "G",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "I",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Latitude"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\" FROM \"ActivityGPS\" WHERE \"Source\" !~ /^huawei$/ AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180 AND $timeFilter ORDER BY time ASC"
         },
         {
-          "alias": "lon",
+          "refId": "H",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "J",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Longitude"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter ORDER BY time ASC"
         },
         {
-          "alias": "HR",
+          "refId": "C",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "HeartRate"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
-        },
-        {
-          "alias": "speed (Km/h)",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
-          },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Speed"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [
-                  "* 3.6"
-                ],
-                "type": "math"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"Speed\" * 3.6 AS \"speed (Km/h)\" FROM \"ActivityGPS\" WHERE \"Source\" !~ /^huawei$/ AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180 AND $timeFilter AND \"Speed\" >= 0 ORDER BY time ASC"
         }
       ],
       "title": "GPS Track by Velocity",
       "transformations": [
         {
-          "id": "joinByField",
+          "id": "sortBy",
+          "filter": {
+            "id": "byRefId",
+            "options": "H"
+          },
           "options": {
-            "byField": "Time",
-            "mode": "outer"
+            "sort": [
+              {
+                "field": "TrackPointIndex",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "exclude": {
+              "names": [
+                "Time",
+                "time"
+              ]
+            }
           }
         }
       ],
-      "type": "geomap"
+      "type": "geomap",
+      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。"
     },
     {
       "datasource": {
@@ -4628,47 +4658,120 @@
         },
         "layers": [
           {
+            "type": "route",
+            "name": "Garmin route",
+            "filterData": {
+              "id": "byRefId",
+              "options": "G"
+            },
+            "tooltip": false,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
             "config": {
               "showLegend": false,
               "style": {
                 "color": {
-                  "fixed": "#040404"
+                  "fixed": "#607d8b"
                 },
-                "opacity": 0.4,
-                "rotation": {
-                  "fixed": 0,
-                  "max": 360,
-                  "min": -360,
-                  "mode": "mod"
-                },
+                "opacity": 0.85,
                 "size": {
-                  "fixed": 5,
-                  "max": 15,
-                  "min": 2
+                  "fixed": 3
+                },
+                "lineWidth": 2
+              },
+              "arrow": 0
+            }
+          },
+          {
+            "type": "route",
+            "name": "Huawei route",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
+            },
+            "tooltip": false,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "lineWidth": 2
+              },
+              "arrow": 0
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Garmin points",
+            "filterData": {
+              "id": "byRefId",
+              "options": "G"
+            },
+            "tooltip": true,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
                 },
                 "symbol": {
-                  "fixed": "img/icons/marker/circle.svg",
-                  "mode": "fixed"
-                },
-                "symbolAlign": {
-                  "horizontal": "center",
-                  "vertical": "center"
-                },
-                "textConfig": {
-                  "fontSize": 12,
-                  "offsetX": 0,
-                  "offsetY": 0,
-                  "textAlign": "center",
-                  "textBaseline": "middle"
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
                 }
               }
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Huawei points",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
             },
-            "location": {
-              "mode": "auto"
-            },
-            "name": "Backdrop",
             "tooltip": true,
-            "type": "markers"
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#607d8b"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              }
+            }
           },
           {
             "config": {
@@ -4711,17 +4814,19 @@
                 }
               }
             },
-            "filterData": {
-              "id": "byRefId",
-              "options": "joinByField-I-J-A-B"
-            },
             "location": {
-              "mode": "auto"
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
             },
             "name": "Heart Rate",
             "opacity": 0.8,
             "tooltip": false,
-            "type": "markers"
+            "type": "markers",
+            "filterData": {
+              "id": "byRefId",
+              "options": "C"
+            }
           }
         ],
         "tooltip": {
@@ -4742,149 +4847,67 @@
       "pluginVersion": "12.0.1",
       "targets": [
         {
-          "alias": "lat",
+          "refId": "G",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "I",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Latitude"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\" FROM \"ActivityGPS\" WHERE \"Source\" !~ /^huawei$/ AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180 AND $timeFilter ORDER BY time ASC"
         },
         {
-          "alias": "lon",
+          "refId": "H",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "J",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Longitude"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter ORDER BY time ASC"
         },
         {
-          "alias": "HR",
+          "refId": "C",
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
+            "uid": "garmin_influxdb"
           },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "HeartRate"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
-        },
-        {
-          "alias": "speed",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "${DS_GARMIN_STATS}"
-          },
-          "groupBy": [],
-          "hide": false,
-          "measurement": "ActivityGPS",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"Latitude\",\"Longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag = \"20250413T084245UTC-Other-Lap3\" AND $timeFilter",
-          "rawQuery": false,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "Speed"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "ActivitySelector::tag",
-              "operator": "=~",
-              "value": "/^$ActivityGPS$/"
-            }
-          ]
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT \"Latitude\" AS \"latitude\", \"Longitude\" AS \"longitude\", \"HeartRate\" AS \"HR\" FROM \"ActivityGPS\" WHERE \"Source\" !~ /^huawei$/ AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180 AND $timeFilter AND \"HeartRate\" >= 0 ORDER BY time ASC"
         }
       ],
       "title": "GPS Track by Heart Rate",
       "transformations": [
         {
-          "id": "joinByField",
+          "id": "sortBy",
+          "filter": {
+            "id": "byRefId",
+            "options": "H"
+          },
           "options": {
-            "byField": "Time",
-            "mode": "outer"
+            "sort": [
+              {
+                "field": "TrackPointIndex",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "exclude": {
+              "names": [
+                "Time",
+                "time"
+              ]
+            }
           }
         }
       ],
-      "type": "geomap"
+      "type": "geomap",
+      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 Garmin 保留真实坐标与已有心率/速度着色；无该指标时仍显示中性轨迹。底图使用 WGS84。Garmin 下拉要求至少两个有效坐标点。"
     },
     {
       "datasource": {
@@ -13403,7 +13426,7 @@
           "color": "rgba(255,0,255,0.7)"
         },
         "filterValues": {
-          "le": 1e-9
+          "le": 1e-09
         },
         "legend": {
           "show": false
@@ -13887,19 +13910,21 @@
           "type": "influxdb",
           "uid": "${DS_GARMIN_STATS}"
         },
-        "definition": "SHOW TAG VALUES FROM \"ActivityGPS\" WITH KEY = \"ActivitySelector\" WHERE $timeFilter",
+        "definition": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WHERE ((\"Source\" !~ /^huawei$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180) OR (\"Source\" = 'huawei' AND \"MapEligible\" = 'true')) AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
         "description": "List of Activities dropdown",
         "label": "Activity with GPS",
         "name": "ActivityGPS",
         "options": [],
         "query": {
-          "query": "SHOW TAG VALUES FROM \"ActivityGPS\" WITH KEY = \"ActivitySelector\" WHERE $timeFilter",
+          "query": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM /^(ActivityGPS|HuaweiActivityTrack)$/ WHERE ((\"Source\" !~ /^huawei$/ AND \"Latitude\" >= -90 AND \"Latitude\" <= 90 AND \"Longitude\" >= -180 AND \"Longitude\" <= 180) OR (\"Source\" = 'huawei' AND \"MapEligible\" = 'true')) AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
           "refId": "InfluxVariableQueryEditor-VariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
         "sort": 4,
-        "type": "query"
+        "type": "query",
+        "multi": false,
+        "includeAll": false
       },
       {
         "current": {

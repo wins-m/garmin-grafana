@@ -24,13 +24,15 @@
           "type": "influxdb",
           "uid": "garmin_influxdb"
         },
-        "query": "SHOW TAG VALUES FROM \"ActivityGPS\" WITH KEY = \"ActivitySelector\" WHERE \"Source\" = 'huawei' AND $timeFilter",
-        "definition": "SHOW TAG VALUES FROM \"ActivityGPS\" WITH KEY = \"ActivitySelector\" WHERE \"Source\" = 'huawei' AND $timeFilter",
+        "query": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
+        "definition": "SELECT \"ActivitySelector\"::tag, \"n\" FROM (SELECT count(\"Latitude\") AS \"n\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND $timeFilter GROUP BY \"ActivitySelector\") WHERE \"n\" >= 2",
         "refresh": 2,
         "sort": 2,
         "multi": false,
         "includeAll": false,
-        "hide": 0
+        "hide": 0,
+        "current": {},
+        "options": []
       }
     ]
   },
@@ -690,14 +692,14 @@
       },
       "targets": [
         {
-          "refId": "A",
+          "refId": "H",
           "datasource": {
             "type": "influxdb",
             "uid": "garmin_influxdb"
           },
           "rawQuery": true,
           "resultFormat": "table",
-          "query": "SELECT \"LatitudeGCJ\" AS \"latitude\", \"LongitudeGCJ\" AS \"longitude\" FROM \"ActivityGPS\" WHERE \"ActivitySelector\"::tag =~ /^$ActivityGPS$/ AND $timeFilter"
+          "query": "SELECT \"LatitudeGCJ\" AS \"latitude\", \"LongitudeGCJ\" AS \"longitude\", \"TrackPointIndex\", \"CoordinateSystem\", \"CoordinateSystemSource\", \"SatelliteTimeKnown\" FROM \"HuaweiActivityTrack\" WHERE \"Source\" = 'huawei' AND \"MapEligible\" = 'true' AND \"ActivitySelector\"::tag =~ /^${ActivityGPS:regex}$/ AND $timeFilter ORDER BY time ASC"
         }
       ],
       "fieldConfig": {
@@ -729,8 +731,40 @@
         },
         "layers": [
           {
+            "type": "route",
+            "name": "华为轨迹",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
+            },
+            "tooltip": false,
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#d55181"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
+                },
+                "lineWidth": 2
+              },
+              "arrow": 0
+            }
+          },
+          {
             "type": "markers",
-            "name": "轨迹",
+            "name": "华为轨迹点",
+            "filterData": {
+              "id": "byRefId",
+              "options": "H"
+            },
             "tooltip": true,
             "location": {
               "mode": "coords",
@@ -740,12 +774,12 @@
             "config": {
               "showLegend": false,
               "style": {
-                "size": {
-                  "fixed": 3
-                },
-                "opacity": 0.9,
                 "color": {
                   "fixed": "#d55181"
+                },
+                "opacity": 0.85,
+                "size": {
+                  "fixed": 3
                 },
                 "symbol": {
                   "mode": "fixed",
@@ -755,7 +789,36 @@
             }
           }
         ]
-      }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "filter": {
+            "id": "byRefId",
+            "options": "H"
+          },
+          "options": {
+            "sort": [
+              {
+                "field": "TrackPointIndex",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "exclude": {
+              "names": [
+                "Time",
+                "time"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "华为轨迹按 TrackPointIndex 排序；存储时间仅为活动开始时间加序号，已从地图移除，不能解释为每点采样时间。SatelliteTimeKnown=false 表示原始卫星时间未知；本地图不推算时间、速度或心率。CoordinateSystemSource=raw_unconfirmed 表示未确认的原始坐标回退，位置可能有偏移；export_default 为导出约定，explicit 为记录明确声明，legacy 为旧记录。华为只有至少两个有效点且 MapEligible=true 的活动可选。 高德底图使用 LatitudeGCJ/LongitudeGCJ。"
     },
     {
       "id": 13,

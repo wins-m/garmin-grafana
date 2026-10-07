@@ -24,6 +24,10 @@ python src/garmin_grafana/validate_prepared.py \
 python src/garmin_grafana/huawei_db_tools.py write \
   --host http://INFLUXDB_HOST:8086 --path ./imports/huawei/prepared/points.lp.gz
 
+python src/garmin_grafana/huawei_db_tools.py write \
+  --host http://INFLUXDB_HOST:8086 --path ./imports/huawei/prepared/tracks.ns.lp.gz \
+  --precision ns
+
 python src/garmin_grafana/huawei_db_tools.py verify \
   --host http://INFLUXDB_HOST:8086 --path ./imports/huawei/after-counts.json
 ```
@@ -71,9 +75,13 @@ and field types; review the snapshot before performing any destructive rollback.
   session matches start within 90 seconds, distance within 2 m and duration within
   2 seconds. Existing summaries and GPS tracks remain intact.
 - GPS `t`: exports contain epoch seconds and epoch milliseconds, identified by
-  the independently recorded activity interval. Zero timestamps remain unknown.
-  Only explicit WGS84/GCJ02 coordinates populate map fields; unspecified coordinates
-  remain `LatitudeRaw`/`LongitudeRaw` with `CoordinateSystem=unknown`.
+  the independently recorded activity interval. Zero timestamps remain unknown in `ActivityGPS`. The export field dictionary
+  (Motion Field description row 19) defines missing `coordinate` as GCJ02; the
+  deprecated field is not required. Null/empty export placeholders use this default.
+  Explicit WGS84/GCJ02 values take precedence; unsupported nonempty values remain
+  `CoordinateSystem=unknown`, with approved raw display fallback and an offset warning.
+  `CoordinateSystemSource` records `explicit`, `export_default`, `raw_unconfirmed`
+  or `legacy`. Raw coordinates remain available unchanged.
 - Minute sports: multiple devices overlap. Preserve exact source observations
   in `HuaweiSportIntraday`, tagged by device and sport. Their distance/calorie/
   duration units are unspecified and kept as `*Raw` fields. Do not SUM their
@@ -85,7 +93,7 @@ and field types; review the snapshot before performing any destructive rollback.
 The manifest lists coverage, point counts and omissions. Other export content such
 as diet, plans, reminders and intensity records is outside these dashboard mappings
 and remains in the original export. No completeness claim is made for unspecified
-units, profile ownership, missing GPS timestamps or missing coordinate systems.
+units, profile ownership, actual satellite timestamps when absent, or unsupported coordinate system semantics.
 
 ## Checks
 
@@ -98,3 +106,51 @@ stage sums and ensure unmerged minute data never enters `StepsIntraday`. After
 writing, compare field counts by Source with the manifest. Garmin series have no
 Huawei Source tag and must retain their existing points. The long-term dashboard
 plots Huawei and Garmin daily series separately to avoid blending them.
+
+## Ordered activity maps and GPS-only repair
+
+`HuaweiActivityTrack` is a map-only measurement, separate from measured `ActivityGPS`.
+It includes valid coordinates without satellite time. The dictionary (Motion Tag
+description row 8) defines `k` as point index, and `t` as satellite time. Points
+sort by `TrackPointIndex`, then original `SourceOrder`. Its Influx timestamp is
+activity start plus an ordinal **nanosecond**, a storage identity only. It must
+never be used to calculate pace, speed, duration or interpolated heart rate.
+`SatelliteTimeKnown` is always present; `SatelliteTimeMs` exists only when real
+satellite time is valid. The dashboards omit storage time from the map tooltip.
+
+`MapEligible=true` requires at least two valid coordinate points. Huawei maps
+query this measurement in table format with explicit latitude/longitude fields,
+route and marker layers. Amap uses GCJ02, and Garmin Stats uses WGS84. The dropdown
+counts valid points per activity and excludes activities without a drawable route.
+Garmin maps retain a separate neutral coordinate route and optional metric coloring;
+missing heart rate or speed cannot hide the basic route. Missing timestamps are not
+written into the real-time `ActivityGPS` measurement. Preserved legacy GPX routes
+retain existing coordinates, tags and identities, including activities absent from
+the complete export.
+
+For an existing complete-export import, prepare only GPS repairs:
+
+```sh
+python src/garmin_grafana/huawei_import.py \
+  --export-root /path/to/HUAWEI_HEALTH_EXPORT \
+  --before ./imports/huawei/original-before \
+  --output ./imports/huawei/gps-prepared --gps-only
+```
+
+Use the **original pre-import snapshot** for legacy GPX matching and preservation;
+do not substitute the complete-import snapshot, whose GPS points include newer
+activities. Separately snapshot the current database before applying the repair.
+Validate field types and existing point identities. Write `points.lp.gz` with ms
+precision, and `tracks.ns.lp.gz` with ns precision. The helper infers precision
+from `.ns.lp.gz` and rejects an explicit mismatched precision. Replaying either
+payload retains its identities. The GPS-only payload changes only coordinate and
+coordinate-provenance fields, and creates the map-only measurement. It does not
+rewrite summaries, heart rate, sleep, or body records.
+
+Keep database snapshots, source exports, prepared payloads, and dashboard backups
+out of Git. Track snapshots retain nanosecond precision. For recovery, restore
+the two dashboard JSON backups. Removing the new track measurement restores the
+pre-repair map data state. Restoring missing GPS fields exactly requires a scoped
+Huawei ActivityGPS restore from the complete pre-repair snapshot, retaining its
+field types and identities; merely replaying older fields does not remove newly
+added Influx fields. Review that operation before a destructive rollback.
